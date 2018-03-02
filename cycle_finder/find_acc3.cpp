@@ -6,12 +6,14 @@
 #include <vector>
 #include <algorithm> // for std::copy
 
-int main()
+int main(int argc, char* argv[])
 {
-    std::ifstream infile("A.csv");
+    std::string folder(argv[1]);
+    std::string filename;
+    filename = folder + "A.csv";
+    std::ifstream infile(filename);
     std::vector< std::vector<bool> > A;
     std::vector< std::vector<int> > cycles;
-    std::vector<int> reactions (3,0);
 
     std::string line;
     while (std::getline(infile, line))
@@ -24,27 +26,24 @@ int main()
         }
         A.push_back(numbers);
     }
+    infile.close();
     
+    std::ofstream outfile;
+    filename = folder + "acc3.csv";
+    outfile.open (filename);
     for(int i = 0; i < A.size(); i++){
         for(int j = 0; j < i; j++){
-            for(int k = 0; k < j; k++){
-                if(A[i][j]*A[j][k]*A[k][i] == 1){
-                    reactions[0] = i+1;
-                    reactions[1] = j+1;
-                    reactions[2] = k+1;
-                    cycles.push_back(reactions);
+            for(int k = 0; k < i; k++){
+                if(k != j){
+                    if(A[i][j]*A[j][k]*A[k][i] == 1){
+                        outfile << i+1 << ",";
+                        outfile << j+1 << ",";
+                        outfile << k+1;
+                        outfile << "\n";
+                    }
                 }
             }
         }
-    }
-    
-    std::ofstream outfile;
-    outfile.open ("acc3.csv");
-    for(int j = 0; j < cycles.size(); j++){
-        for(int m = 0; m < cycles[j].size(); m++){
-            outfile << cycles[j][m] << ",";
-        }
-        outfile << "\n";
     }
     outfile.close();
     

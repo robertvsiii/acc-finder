@@ -45,8 +45,8 @@ def PrintReactions(reactions,S,metadata):
     for item in reactions:
         reactant_idx = S.index[np.where(S[item]<0)[0]]
         product_idx = S.index[np.where(S[item]>0)[0]]
-        reactants.append([(str(-S[item][idx])+' '+metadata['NAME'].loc[idx]) for idx in reactant_idx])
-        products.append([(str(S[item][idx])+' '+metadata['NAME'].loc[idx]) for idx in product_idx])
+        reactants.append([(str(-S[item][idx])+' '+metadata['name'].loc[idx].split(';')[0]) for idx in reactant_idx])
+        products.append([(str(S[item][idx])+' '+metadata['name'].loc[idx].split(';')[0]) for idx in product_idx])
     equations = ''
     for k in range(len(reactions)):
         equations = equations + (' -> ').join([(' + ').join(reactants[k]),(' + ').join(products[k])]) + ' || '
@@ -55,11 +55,14 @@ def PrintReactions(reactions,S,metadata):
 def Find_ACC(folder,name):
     folder = FormatPath(folder)
     output_name = name.split('.')[0]+'_data.csv'
-    S = pd.read_csv(folder+'S.csv',index_col=0,header=0)
-    keep = [item[:2]!='EX' for item in S.keys()]
-    S = S[S.keys()[keep]].drop('C00080')
+    S_full = pd.read_csv(folder+'S.csv',index_col=0,header=0)
+    DelG = pd.read_csv(folder+'DelG.csv',header=None).squeeze()
+    DelG.index = S_full.keys()
+    keep = [item[:2]!='EX' for item in S_full.keys()]
+    S = S_full[S_full.keys()[keep]].drop('C00080')
     S = S.T.drop_duplicates().T
     seed = pd.read_csv(folder+'seed.csv',header=None).squeeze()
+    seed = list(set(seed).intersection(S.index))
     seed_nothiol=seed[np.logical_and(seed!='C00342',seed!='C00343')]
     S_noseed = S.drop(seed_nothiol).drop('C99999').drop('C99998')
     metadata = pd.read_excel(folder+'metadata.xlsx',index_col=0,header=0)
@@ -78,6 +81,10 @@ def Find_ACC(folder,name):
         temp['Substrate Carbon Count']=np.nan
         temp['Food Carbon Count']=np.nan
         temp['Equations']=np.nan
+        temp['Total DelG']=np.nan
+        temp['Max DelG']=np.nan
+        temp['Carbon Fixing']=False
+        temp['Autotroph']=False
     
         for item in temp.index:
             reactions = temp['Reactions'].loc[item].split('-')
@@ -88,11 +95,16 @@ def Find_ACC(folder,name):
             ac_substrate = consumed.intersection(net_produced)
             food = S.index[S.loc[:,reactions].sum(axis=1)<0]
             conserved_intermediates = np.all(S_noseed[reactions].loc[intermediate].sum(axis=1)>=0)
+            DelG_vals = [DelG[reaction] for reaction in reactions]
             temp.loc[item,'Autocatalytic Substrates'] = '-'.join(ac_substrate)
             temp.loc[item,'Waste'] = '-'.join(net_produced.difference(ac_substrate))
             temp.loc[item,'Intermediate']='-'.join(intermediate)
             temp.loc[item,'Autocatalytic?'] = bool((len(ac_substrate)>0)*conserved_intermediates)
             temp.loc[item,'Food'] = '-'.join(food)
+            temp.loc[item,'Total DelG'] = np.sum(DelG_vals)
+            temp.loc[item,'Max DelG'] = np.max(DelG_vals)
+            temp.loc[item,'Carbon Fixing'] = len(set(food).intersection(set(['C00011','C00288'])))>0
+            temp.loc[item,'Autotroph'] = len(set(food).intersection(set(seed)))==len(set(food))
             try:
                 temp.loc[item,'Substrate Carbon Count']='-'.join([str(metadata['Carbon Count'][compound]) for compound in ac_substrate])
             except:
@@ -102,7 +114,7 @@ def Find_ACC(folder,name):
             except:
                 pass
             try:
-                temp.loc[item,'Equations']=PrintReactions(reactions,S,metadata)
+                temp.loc[item,'Equations']=PrintReactions(reactions,S_full,metadata)
             except:
                 pass
         acc_data = temp.loc[temp['Autocatalytic?']]
